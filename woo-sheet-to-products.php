@@ -2,7 +2,7 @@
 /*
 Plugin Name: Woo CSV Product Uploader
 Description: Uploads CSV file and adds WooCommerce variations to a single product.
-Version: 1.0
+Version: 1.4.0
 Author: Aeros Salaga
 Author URI: aerossalaga.com
 */
@@ -28,7 +28,7 @@ function csv_product_uploader_page() {
         <form method="post" enctype="multipart/form-data">
             <input type="file" name="csv_file" />
             <input type="text" name="product_id" placeholder="Product ID" />
-            <input type="submit" name="upload_btn" value="Upload CSV" />
+            <input type="submit" name="csv_product_uploader_btn" value="Upload CSV" />
         </form>
     </div>
     <?php
@@ -36,10 +36,13 @@ function csv_product_uploader_page() {
 
 // Process the uploaded CSV file
 function process_uploaded_csv() {
-    if (isset($_POST['upload_btn'])) {
+    if (isset($_POST['csv_product_uploader_btn'])) {
         if (!empty($_FILES['csv_file']['tmp_name'])) {
             $csv_path = $_FILES['csv_file']['tmp_name'];
             $product_id = intval($_POST['product_id']);
+
+            // Check if the product exists
+            $product = wc_get_product($product_id);
 
             // Read the CSV data
             $csv_data = array_map('str_getcsv', file($csv_path));
@@ -52,27 +55,33 @@ function process_uploaded_csv() {
             $metal_index = array_search('metal', array_map('strtolower', $headers));
             $stone_shape_index = array_search('stone shape', array_map('strtolower', $headers));
             $stone_size_index = array_search('stone size', array_map('strtolower', $headers));
+            $dimensions_index = array_search('dimensions', array_map('strtolower', $headers));
+            $ring_size_index = array_search('ring size', array_map('strtolower', $headers));
             $image_1_index = array_search('image 1', array_map('strtolower', $headers));
             $image_2_index = array_search('image 2', array_map('strtolower', $headers));
             $image_3_index = array_search('image 3', array_map('strtolower', $headers));
+            $image_4_index = array_search('image 4', array_map('strtolower', $headers));
+            $image_5_index = array_search('image 5', array_map('strtolower', $headers));
 
-            if ($sku_index !== false && $description_index !== false && $price_index !== false && $metal_index !== false && $stone_shape_index !== false && $stone_size_index !== false) {
+            if ($sku_index !== false && $description_index !== false && $price_index !== false) {
                 // Iterate through the CSV data and add variations to the specified product
-                foreach ($csv_data as $row) {
-                    $sku = $row[$sku_index];
-                    $description = $row[$description_index];
-                    $price = $row[$price_index];
-                    $metal = $row[$metal_index];
-                    $stone_shape = $row[$stone_shape_index];
-                    $stone_size = $row[$stone_size_index];
-                    $image_1 = $row[$image_1_index];
-                    $image_2 = $row[$image_2_index];
-                    $image_3 = $row[$image_3_index];
+                if ($product) {
+                    foreach ($csv_data as $row) {
+                        $sku = $row[$sku_index];
+                        $description = $row[$description_index];
+                        $price = $row[$price_index];
+                        $metal = $row[$metal_index];
+                        $stone_shape = $row[$stone_shape_index];
+                        $stone_size = $row[$stone_size_index];
+                        $dimensions = $row[$dimensions_index];
+                        $ring_size = $row[$ring_size_index];
+                        $image_1 = $row[$image_1_index];
+                        $image_2 = $row[$image_2_index];
+                        $image_3 = $row[$image_3_index];
+                        $image_4 = $row[$image_4_index];
+                        $image_5 = $row[$image_5_index];                   
 
-                    // Check if the product exists
-                    $product = wc_get_product($product_id);
-
-                    if ($product) {
+                    
                         // Create a new variation
                         $variation_data = array(
                             'post_title' => $product->get_name() . ' ' . $sku,
@@ -91,7 +100,9 @@ function process_uploaded_csv() {
                         $attributes = array(
                             'metal' => $metal,
                             'stone-shape' => $stone_shape,
-                            'stone-size' => $stone_size
+                            'stone-size' => $stone_size,
+                            'dimensions' => $dimensions,
+                            'ring-size' => $ring_size,
                         );
 
                         $variation_product_attributes = array();
@@ -108,14 +119,23 @@ function process_uploaded_csv() {
                         $variation_product->set_sku($sku);
 
                         // Process variation images
-                        $image_urls = array($image_1, $image_2, $image_3);
+                        $image_urls = array($image_1, $image_2, $image_3, $image_4, $image_5);
                         $image_ids = array();
                         foreach ($image_urls as $image_url) {
                             if (!empty($image_url)) {
-                                $image_path = site_url() . '/wp-content/uploads/2023/07/' . $image_url;
+                                //manually set image directory where the images was uploaded
+                                $image_path = site_url() . '/wp-content/uploads/2023/08/' . $image_url;
                                 $image_id = attachment_url_to_postid($image_path);
                                 if ($image_id) {
                                     $image_ids[] = $image_id;
+                                } else {
+                                    //manually set image directory where the images was uploaded
+                                    $image_path = site_url() . '/wp-content/uploads/2023/08/' . $image_url;
+                                    $image_id = attachment_url_to_postid($image_path);
+
+                                    if ($image_id) {
+                                        $image_ids[] = $image_id;
+                                    }
                                 }
                             }
                         }
@@ -140,12 +160,12 @@ function process_uploaded_csv() {
                         $variation_product->save();
 
                         echo '<div class="notice notice-success"><p>Variation with SKU "' . $sku . '" added successfully!</p></div>';
-                    } else {
-                        echo '<div class="notice notice-error"><p>Invalid product ID provided!</p></div>';
                     }
+                } else {
+                    echo '<div class="notice notice-error"><p>Invalid product ID provided!</p></div>';
                 }
             } else {
-                echo '<div class="notice notice-error"><p>Invalid CSV file format! Make sure the required columns are present: sku, description, price, metal, stone shape, stone size, and image url.</p></div>';
+                echo '<div class="notice notice-error"><p>Invalid CSV file format! Make sure the required columns are present: sku, description, price, metal, stone shape, stone size, image 1, image 2, and image 3.</p></div>';
             }
         } else {
             echo '<div class="notice notice-error"><p>No file uploaded!</p></div>';
